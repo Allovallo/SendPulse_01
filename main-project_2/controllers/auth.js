@@ -1,74 +1,95 @@
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { nanoid } = require('nanoid');
 
-const {User} = require("../models/user");
+const { User } = require('../models/user');
 
-const { HttpError, ctrlWrapper } = require("../helpers");
+const {
+  HttpError,
+  ctrlWrapper,
+  sendEmail,
+} = require('../helpers');
 
-const {SECRET_KEY} = process.env;
+const { SECRET_KEY } = process.env;
 
-const register = async(req, res)=> {
-    const {email, password} = req.body;
-    const user = await User.findOne({email});
+const register = async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  const verificationCode = nanoid();
 
-    if(user){
-        throw HttpError(409, "Email already in use");
-    }
+  if (user) {
+    throw HttpError(409, 'Email already in use');
+  }
 
-    const hashPassword = await bcrypt.hash(password, 10);
+  const hashPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await User.create({...req.body, password: hashPassword});
+  const newUser = await User.create({
+    ...req.body,
+    password: hashPassword,
+    verificationCode,
+  });
 
-    res.status(201).json({
-        email: newUser.email,
-        name: newUser.name,
-    })
-}
+  const verifyEmail = {
+    to: email,
+    subject: 'Verify email',
+    html: `<a target="_blank" href="http://localhost:3000/api/auth/verify/${verificationCode}">Click erify email</a>`,
+  };
 
-const login = async(req, res)=> {
-    const {email, password} = req.body;
-    const user = await User.findOne({email});
-    if(!user){
-        throw HttpError(401, "Email or password invalid");
-    }
-    const passwordCompare = await bcrypt.compare(password, user.password);
-    if(!passwordCompare) {
-        throw HttpError(401, "Email or password invalid");
-    }
+  res.status(201).json({
+    email: newUser.email,
+    name: newUser.name,
+  });
+};
 
-    const payload = {
-        id: user._id,
-    }
+const login = async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw HttpError(401, 'Email or password invalid');
+  }
+  const passwordCompare = await bcrypt.compare(
+    password,
+    user.password,
+  );
+  if (!passwordCompare) {
+    throw HttpError(401, 'Email or password invalid');
+  }
 
-    const token = jwt.sign(payload, SECRET_KEY, {expiresIn: "23h"});
-    await User.findByIdAndUpdate(user._id, {token});
+  const payload = {
+    id: user._id,
+  };
 
-    res.json({
-        token,
-    })
-}
+  const token = jwt.sign(payload, SECRET_KEY, {
+    expiresIn: '23h',
+  });
+  await User.findByIdAndUpdate(user._id, { token });
 
-const getCurrent = async(req, res)=> {
-    const {email, name} = req.user;
+  res.json({
+    token,
+  });
+};
 
-    res.json({
-        email,
-        name,
-    })
-}
+const getCurrent = async (req, res) => {
+  const { email, name } = req.user;
 
-const logout = async(req, res) => {
-    const {_id} = req.user;
-    await User.findByIdAndUpdate(_id, {token: ""});
+  res.json({
+    email,
+    name,
+  });
+};
 
-    res.json({
-        message: "Logout success"
-    })
-}
+const logout = async (req, res) => {
+  const { _id } = req.user;
+  await User.findByIdAndUpdate(_id, { token: '' });
+
+  res.json({
+    message: 'Logout success',
+  });
+};
 
 module.exports = {
-    register: ctrlWrapper(register),
-    login: ctrlWrapper(login),
-    getCurrent: ctrlWrapper(getCurrent),
-    logout: ctrlWrapper(logout),
-}
+  register: ctrlWrapper(register),
+  login: ctrlWrapper(login),
+  getCurrent: ctrlWrapper(getCurrent),
+  logout: ctrlWrapper(logout),
+};

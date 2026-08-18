@@ -57,6 +57,27 @@ const verifyEmail = async (req, res) => {
   res.json({ message: 'Email verify success' });
 };
 
+const resendVerifyEmail = async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw HttpError(401, 'Email not verified');
+  }
+  if (user.verify) {
+    throw HttpError(401, 'Email already verified');
+  }
+
+  const verifyEmail = {
+    to: email,
+    subject: 'Verify email',
+    html: `<a target="_blank" href="${BASE_URL}/api/auth/verify/${user.verificationCode}">Click verify email</a>`,
+  };
+
+  await sendEmail(verifyEmail);
+
+  res.json({message: "Verify email send success"})
+};
+
 const login = async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -111,6 +132,7 @@ const logout = async (req, res) => {
 module.exports = {
   register: ctrlWrapper(register),
   verifyEmail: ctrlWrapper(verifyEmail),
+  resendVerifyEmail: ctrlWrapper(resendVerifyEmail),
   login: ctrlWrapper(login),
   getCurrent: ctrlWrapper(getCurrent),
   logout: ctrlWrapper(logout),

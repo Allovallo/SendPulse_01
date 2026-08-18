@@ -10,7 +10,7 @@ const {
   sendEmail,
 } = require('../helpers');
 
-const { SECRET_KEY } = process.env;
+const { SECRET_KEY, BASE_URL } = process.env;
 
 const register = async (req, res) => {
   const { email, password } = req.body;
@@ -32,13 +32,29 @@ const register = async (req, res) => {
   const verifyEmail = {
     to: email,
     subject: 'Verify email',
-    html: `<a target="_blank" href="http://localhost:3000/api/auth/verify/${verificationCode}">Click erify email</a>`,
+    html: `<a target="_blank" href="${BASE_URL}/api/auth/verify/${verificationCode}">Click verify email</a>`,
   };
+
+  await sendEmail(verifyEmail);
 
   res.status(201).json({
     email: newUser.email,
     name: newUser.name,
   });
+};
+
+const verifyEmail = async (req, res) => {
+  const { verificationCode } = req.params;
+  const user = await User.findOne({ verificationCode });
+  if (!user) {
+    throw HttpError(401, 'Email not verified');
+  }
+  await User.findByIdAndUpdate(user._id, {
+    verify: true,
+    verificationCode: '',
+  });
+
+  res.json({ message: 'Email verify success' });
 };
 
 const login = async (req, res) => {
@@ -47,6 +63,11 @@ const login = async (req, res) => {
   if (!user) {
     throw HttpError(401, 'Email or password invalid');
   }
+
+  if (!user.verify) {
+    throw HttpError(401, 'Email not verified');
+  }
+
   const passwordCompare = await bcrypt.compare(
     password,
     user.password,
@@ -89,6 +110,7 @@ const logout = async (req, res) => {
 
 module.exports = {
   register: ctrlWrapper(register),
+  verifyEmail: ctrlWrapper(verifyEmail),
   login: ctrlWrapper(login),
   getCurrent: ctrlWrapper(getCurrent),
   logout: ctrlWrapper(logout),
